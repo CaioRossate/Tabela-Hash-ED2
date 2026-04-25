@@ -1,0 +1,18 @@
+# Pastas de compilação
+build/
+
+# Executáveis
+bitnopolis
+teste_hashing
+
+# Arquivos de objeto e bibliotecas
+*.o
+*.a
+
+# Arquivos .hf e .hfd (hashing)
+*.hf
+*.hfd
+
+# Arquivos temporários e de log
+*.log
+.vscode/
