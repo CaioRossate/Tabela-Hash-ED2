@@ -81,7 +81,7 @@ void processarArquivoQry(const char* path_qry, Hash h_q, Hash h_p, FILE* fTxt, F
             fscanf(arq, "%s", cep);
             comando_rq(h_q, h_p, cep, fTxt, fSvg);
         } 
-        else if (strcmp(comando, "Pq") == 0) {
+        else if (strcmp(comando, "Pq") == 0 || strcmp(comando, "pq") == 0) {
             char cep[20];
             fscanf(arq, "%s", cep);
             comando_Pq(h_q, h_p, cep, fTxt, fSvg);
@@ -105,9 +105,19 @@ void processarArquivoQry(const char* path_qry, Hash h_q, Hash h_p, FILE* fTxt, F
             comando_rip(h_p, h_q, cpf, fTxt, fSvg);
         }
         else if (strcmp(comando, "mud") == 0) {
-            char cpf[20], cep[20], face, cmpl[30];
+            char cpf[20], cep[20], face, cmpl[100], face_str[10];
             double num;
-            fscanf(arq, "%s %s %c %lf %s", cpf, cep, &face, &num, cmpl);
+            if (fscanf(arq, "%s %s", cpf, cep) != 2) continue;
+
+            if (fscanf(arq, "%s", face_str) != 1) continue;
+            face = face_str[0]; // Pega o primeiro caractere (N, S, L ou O)
+
+            if (fscanf(arq, "%lf %s", &num, cmpl) != 2) {
+                char lixo[256];
+                fgets(lixo, sizeof(lixo), arq);
+                continue;
+            }
+
             comando_mud(h_p, h_q, cpf, cep, face, num, cmpl, fTxt, fSvg);
         }
         else if (strcmp(comando, "dspj") == 0) {

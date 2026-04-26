@@ -55,6 +55,13 @@ int main(int argc, char* argv[]) {
     if (dot) strcpy(dot, ".pm"); 
 
     printf("[DEBUG PM] Tentando abrir pessoas: %s\n", pathPm);
+    FILE *checkPm = fopen(pathPm, "r");
+    if (!checkPm) {
+        printf("[ERRO] Nao foi possivel ler o arquivo PM em: %s\n", pathPm);
+    } else {
+        printf("[SUCESSO] Arquivo PM encontrado!\n");
+        fclose(checkPm);
+    }
     processarArquivoPm(pathPm, hashPessoas);
 
     if (paths[QUERY]) {
