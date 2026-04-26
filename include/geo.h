@@ -45,6 +45,15 @@ void gerarCidadeSVG(Hash h_q, FILE* fSvg);
 Quadra criarQuadra(char* cep, double x, double y, double w, double h, char* cor_b, char* cor_p, char* sw);
 
 /**
+ * @brief Cria uma instância de quadra em memória usando as cores padrão (preenchimento branco, borda preta, largura 1.0).
+ * @param cfill Cor de preenchimento.
+ * @param cstrk Cor da borda.
+ * @param sw Espessura da borda.
+ * @return Retorna um ponteiro (Quadra) para a estrutura criada, ou NULL
+ */
+Quadra comando_cq (char* cfill, char* cstrk, char* sw);
+
+/**
  * @brief Libera a memória alocada para a quadra.
  * @param q A quadra a ser destruída.
  */
@@ -86,5 +95,26 @@ double getQuadraW(Quadra q);
  * @return A altura da quadra.
  */
 double getQuadraH(Quadra q);
+
+/**
+ * @brief Retorna a cor de preenchimento da quadra.
+ * @param q A quadra da qual se deseja obter a cor.
+ * @return Ponteiro para a string de cor de preenchimento.
+ */
+const char* getQuadraCorP(Quadra q);
+
+/**
+ * @brief Retorna a cor da borda da quadra.
+ * @param q A quadra da qual se deseja obter a cor.
+ * @return Ponteiro para a string de cor da borda.
+ */
+const char* getQuadraCorB(Quadra q);
+
+/**
+ * @brief Retorna a espessura da borda da quadra.
+ * @param q A quadra da qual se deseja obter a espessura.
+ * @return Ponteiro para a string de espessura da borda.
+ */
+const char* getQuadraSW(Quadra q);
 
 #endif

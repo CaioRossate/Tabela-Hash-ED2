@@ -16,6 +16,7 @@ OBJS_SISTEMA = $(BUILD_DIR)/hashing.o \
                $(BUILD_DIR)/geo.o \
                $(BUILD_DIR)/pessoa.o \
                $(BUILD_DIR)/qry.o \
+               $(BUILD_DIR)/pm.o \
                $(BUILD_DIR)/main.o
 
 # Objetos do Teste Unitário

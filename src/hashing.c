@@ -5,14 +5,14 @@
 #include <assert.h>
 #include "hashing.h"
 
-#define BUCKET_CAPACIDADE 4
-#define TAM_CHAVE 20
+#define BUCKET_CAPACIDADE 10
+#define TAM_CHAVE 128
 
 
 typedef struct {
     int profundidade_local;
     int quantidade;
-    char dados[BUCKET_CAPACIDADE * 256];
+    char dados[BUCKET_CAPACIDADE * TAM_CHAVE];
 } Bucket;
 
 typedef struct {
@@ -75,8 +75,15 @@ bool inserirHash(Hash h, void* dado) {
     HashExtensivel* hash_ext = (HashExtensivel*)h;
     char* chave = (char*)dado;
     uint64_t v_hash = gerar_hash_djb2(chave);
+    int trava_seguranca = 0;
 
     while (true) {
+        // Proteção contra loop infinito em caso de colisões excessivas
+        if (trava_seguranca++ > 32) {
+            fprintf(stderr, "Erro crítico: Loop de split detectado. Verifique a função de hash.\n");
+            return false;
+        }
+
         int idx = v_hash & ((1 << hash_ext->profundidade_global) - 1);
         long offset_alvo = hash_ext->offsets[idx];
         
@@ -93,7 +100,7 @@ bool inserirHash(Hash h, void* dado) {
             }
         }
 
-        // Inserção simples se houver espaço
+        // Inserção simples
         if (b.quantidade < BUCKET_CAPACIDADE) {
             memcpy(&b.dados[b.quantidade * hash_ext->tam_reg], dado, hash_ext->tam_reg);
             b.quantidade++;
@@ -101,43 +108,39 @@ bool inserirHash(Hash h, void* dado) {
             return true;
         }
 
-        // Split necessário
+        // Split Necessário
         if (b.profundidade_local == hash_ext->profundidade_global) {
-            // Expansão do diretório na RAM
             int tam_antigo = hash_ext->total_indices;
             hash_ext->profundidade_global++;
             hash_ext->total_indices = 1 << hash_ext->profundidade_global;
             hash_ext->offsets = realloc(hash_ext->offsets, sizeof(long) * hash_ext->total_indices);
+            
             for (int i = 0; i < tam_antigo; i++) {
                 hash_ext->offsets[i + tam_antigo] = hash_ext->offsets[i];
             }
         }
 
-        // Cria novo bucket para o split
-        long novo_offset = alocar_bucket(hash_ext, b.profundidade_local + 1);
+        // Criar novo bucket e redistribuir
         int bit_separador = 1 << b.profundidade_local;
         b.profundidade_local++;
+        long novo_offset = alocar_bucket(hash_ext, b.profundidade_local);
 
-        // Backup dos dados do bucket antes de limpar para o split
-        char buffer_backup[BUCKET_CAPACIDADE * 256];
+        // Backup e limpeza do original
+        char buffer_backup[BUCKET_CAPACIDADE * TAM_CHAVE];
         int qtd_backup = b.quantidade;
         memcpy(buffer_backup, b.dados, sizeof(b.dados));
-        
-        // Limpa o bucket original
         b.quantidade = 0;
         memset(b.dados, 0, sizeof(b.dados));
+        salvar_bucket(hash_ext->arquivo, offset_alvo, &b);
 
-        // Atualiza diretório para o novo bucket
+        // Atualiza diretório
         for (int i = 0; i < hash_ext->total_indices; i++) {
             if (hash_ext->offsets[i] == offset_alvo && (i & bit_separador)) {
                 hash_ext->offsets[i] = novo_offset;
             }
         }
 
-        // Salva o bucket original (agora vazio e com profundidade local aumentada)
-        salvar_bucket(hash_ext->arquivo, offset_alvo, &b);
-
-        // Redistribui os registros do backup
+        // Redistribuição dos registros
         for (int i = 0; i < qtd_backup; i++) {
             void* reg_atual = &buffer_backup[i * hash_ext->tam_reg];
             uint64_t h_item = gerar_hash_djb2((char*)reg_atual);
@@ -146,11 +149,12 @@ bool inserirHash(Hash h, void* dado) {
             
             Bucket b_dest;
             carregar_bucket(hash_ext->arquivo, offset_dest, &b_dest);
-            memcpy(&b_dest.dados[b_dest.quantidade * hash_ext->tam_reg], reg_atual, hash_ext->tam_reg);
-            b_dest.quantidade++;
-            salvar_bucket(hash_ext->arquivo, offset_dest, &b_dest);
+            if (b_dest.quantidade < BUCKET_CAPACIDADE) {
+                memcpy(&b_dest.dados[b_dest.quantidade * hash_ext->tam_reg], reg_atual, hash_ext->tam_reg);
+                b_dest.quantidade++;
+                salvar_bucket(hash_ext->arquivo, offset_dest, &b_dest);
+            }
         }
-        // O loop 'while' recomeça e tenta inserir a nova chave novamente
     }
 }
 
@@ -165,7 +169,7 @@ bool buscarHash(Hash h, char* chave, void* destino) {
     for (int i = 0; i < b.quantidade; i++) {
         char* chave_b = &b.dados[i * hash_ext->tam_reg];
         if (strcmp(chave_b, chave) == 0) {
-            memcpy(destino, chave_b, hash_ext->tam_reg);
+            memcpy(destino, &b.dados[i * hash_ext->tam_reg], hash_ext->tam_reg);
             return true;
         }
     }

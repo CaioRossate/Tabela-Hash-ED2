@@ -24,10 +24,10 @@ double getQuadraY(Quadra q)  { return (q != NULL) ? ((quadra_t*)q)->y : 0; }
 double getQuadraW(Quadra q)  { return (q != NULL) ? ((quadra_t*)q)->w : 0; }
 double getQuadraH(Quadra q)  { return (q != NULL) ? ((quadra_t*)q)->h : 0; }
 
-// Getters internos para as cores
-static char* getQuadraCorP(Quadra q) { return ((quadra_t*)q)->cor_p; }
-static char* getQuadraCorB(Quadra q) { return ((quadra_t*)q)->cor_b; }
-static char* getQuadraSW(Quadra q)   { return ((quadra_t*)q)->sw; }
+// Getters para as cores (públicos)
+const char* getQuadraCorP(Quadra q) { return (q != NULL) ? ((quadra_t*)q)->cor_p : NULL; }
+const char* getQuadraCorB(Quadra q) { return (q != NULL) ? ((quadra_t*)q)->cor_b : NULL; }
+const char* getQuadraSW(Quadra q)   { return (q != NULL) ? ((quadra_t*)q)->sw : NULL; }
 
 // Quadra
 Quadra criarQuadra(char* cep, double x, double y, double w, double h, char* cor_b, char* cor_p, char* sw) {
@@ -79,14 +79,18 @@ bool processarArquivoGeo(const char* path_geo, Hash hash_quadras) {
 void desenharQuadraSVG(void* reg, void* ctx) {
     FILE* svg = (FILE*) ctx;
     if (!reg || !svg) return;
+    
+    // Desenha o retângulo da quadra
+    fprintf(svg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%s\" />\n",
             getQuadraX(reg), 
             getQuadraY(reg), 
             getQuadraW(reg), 
             getQuadraH(reg),
             getQuadraCorP(reg),
             getQuadraCorB(reg),
-            getQuadraSW(reg);
+            getQuadraSW(reg));
     
+    // Desenha o texto com o CEP
     fprintf(svg, "\t<text x=\"%lf\" y=\"%lf\" font-size=\"4\" fill=\"black\">%s</text>\n", 
             getQuadraX(reg) + 2, getQuadraY(reg) + 10, getQuadraCEP(reg));
 }

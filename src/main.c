@@ -5,12 +5,14 @@
 #include "geo.h"
 #include "qry.h"
 #include "pessoa.h"
+#include "pm.h"
 
 typedef enum { ENTRADA, SAIDA, GEO, QUERY } FilePaths;
 
 char* concatenarCaminho(const char* dir, const char* arquivo);
 
 int main(int argc, char* argv[]) {
+    
     char* flags[] = {"-e", "-o", "-f", "-q"};
     char** paths = calloc(4, sizeof(char*));
 
@@ -38,10 +40,34 @@ int main(int argc, char* argv[]) {
     }
 
     char* pathCompletoGeo = concatenarCaminho(paths[ENTRADA], paths[GEO]);
+    printf("\n[DEBUG GEO] Tentando abrir: %s\n", pathCompletoGeo);
+    FILE *checkGeo = fopen(pathCompletoGeo, "r");
+    if (!checkGeo) {
+        printf("[ERRO] Nao foi possivel ler o arquivo GEO em: %s\n", pathCompletoGeo);
+    } else {
+        printf("[SUCESSO] Arquivo GEO encontrado!\n");
+        fclose(checkGeo);
+    }
     processarArquivoGeo(pathCompletoGeo, hashQuadras);
+    //conferir logica do .pm depois
+    char pathPm[256];
+    strcpy(pathPm, pathCompletoGeo);
+    char* dot = strrchr(pathPm, '.');
+    if (dot) strcpy(dot, ".pm"); 
+
+    printf("[DEBUG PM] Tentando abrir pessoas: %s\n", pathPm);
+    processarArquivoPm(pathPm, hashPessoas);
 
     if (paths[QUERY]) {
         char* pathCompletoQry = concatenarCaminho(paths[ENTRADA], paths[QUERY]);
+        printf("[DEBUG QRY] Tentando abrir: %s\n", pathCompletoQry);
+        FILE *checkQry = fopen(pathCompletoQry, "r");
+        if (!checkQry) {
+            printf("[ERRO] Nao foi possivel ler o arquivo QRY em: %s\n", pathCompletoQry);
+        } else {
+            printf("[SUCESSO] Arquivo QRY encontrado!\n");
+            fclose(checkQry);
+        }
         
         char pathSaidaTxt[256], pathSaidaSvg[256];
         sprintf(pathSaidaTxt, "%s/resultado.txt", paths[SAIDA]);
