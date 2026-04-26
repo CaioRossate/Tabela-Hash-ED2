@@ -101,3 +101,8 @@ char habitante_get_face(const void* hab) {
     habitante_t* h = (habitante_t*)hab;
     return h->endereco.face;
 }
+
+double habitante_get_numero(const void* hab) {
+    habitante_t* h = (habitante_t*)hab;
+    return h->endereco.numero;
+}

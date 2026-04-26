@@ -49,8 +49,7 @@ int main(int argc, char* argv[]) {
         fclose(checkGeo);
     }
     processarArquivoGeo(pathCompletoGeo, hashQuadras);
-    //conferir logica do .pm depois
-    char pathPm[256];
+    char pathPm[512];
     strcpy(pathPm, pathCompletoGeo);
     char* dot = strrchr(pathPm, '.');
     if (dot) strcpy(dot, ".pm"); 
@@ -69,17 +68,31 @@ int main(int argc, char* argv[]) {
             fclose(checkQry);
         }
         
-        char pathSaidaTxt[256], pathSaidaSvg[256];
-        sprintf(pathSaidaTxt, "%s/resultado.txt", paths[SAIDA]);
-        sprintf(pathSaidaSvg, "%s/resultado.svg", paths[SAIDA]);
+        char pathSaidaTxt[512], pathSaidaSvg[512];
+        
+        char geoBase[128];
+        strcpy(geoBase, paths[GEO]);
+        char* dotGeo = strrchr(geoBase, '.');
+        if (dotGeo) *dotGeo = '\0';
+        
+        char qryBase[128];
+        strcpy(qryBase, paths[QUERY]);
+        char* barra = strrchr(qryBase, '/');
+        if (barra) memmove(qryBase, barra +1, strlen(barra));
+        
 
+        sprintf(pathSaidaTxt, "%s/%s-%s.txt", paths[SAIDA], geoBase, qryBase);
+        sprintf(pathSaidaSvg, "%s/%s-%s.svg", paths[SAIDA], geoBase, qryBase);
         FILE* fTxt = fopen(pathSaidaTxt, "w");
+        if (!fTxt) printf("Erro ao criar TXT: %s\n", pathSaidaTxt);
         FILE* fSvg = fopen(pathSaidaSvg, "w");
+        if (!fSvg) printf("Erro ao criar SVG: %s\n", pathSaidaSvg);
 
         if (fTxt && fSvg) {
             fprintf(fSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
             
             gerarCidadeSVG(hashQuadras, fSvg);
+            gerarPessoasSVG(hashPessoas, hashQuadras, fSvg);
             
             processarArquivoQry(pathCompletoQry, hashQuadras, hashPessoas, fTxt, fSvg);
             
