@@ -99,6 +99,13 @@ const char* habitante_get_cep(const void* p);
 char habitante_get_face(const void* p);
 
 /**
+ * @brief Retorna o número do endereço da pessoa.
+ * @param p A pessoa a ser consultada.
+ * @return O número da residência na face da quadra.
+ */
+double habitante_get_numero(const void* p);
+
+/**
  * @brief Imprime todos os dados da pessoa no arquivo TXT.
  * @param txt O arquivo de texto aberto para escrita.
  * @param h A pessoa cujos dados serão impressos.

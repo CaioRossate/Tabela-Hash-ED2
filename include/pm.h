@@ -11,9 +11,6 @@
 
 /**
  * @brief Processa o arquivo .pm e popula o hash de pessoas.
- * Cada linha pode ser:
- *   p cpf nome sobrenome sexo nasc
- *   m cpf cep face num compl
  * @param path_pm Caminho para o arquivo .pm
  * @param hash_pessoas Hash de pessoas 
  * @return true se processou corretamente, false caso contrário
