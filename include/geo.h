@@ -117,12 +117,6 @@ const char* getQuadraCorB(Quadra q);
  */
 const char* getQuadraSW(Quadra q);
 
-/**
- * @brief Gera o SVG com todas as pessoas desenhadas nas quadras.
- * @param h_p Hash de pessoas.
- * @param h_q Hash de quadras.
- * @param fSvg Arquivo SVG para escrita.
- */
-void gerarPessoasSVG(Hash h_p, Hash h_q, FILE* fSvg);
+
 
 #endif

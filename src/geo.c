@@ -107,74 +107,21 @@ static void calcularPosicaoPessoa(double x, double y, double w, double h, char f
     *outY = y;
     
     switch (face) {
-        case 'N': // Norte - face superior
+        case 'N': 
             *outX = x + num;
             *outY = y + 5;
             break;
-        case 'S': // Sul - face inferior
+        case 'S': 
             *outX = x + num;
             *outY = y + h - 5;
             break;
-        case 'L': // Leste - face direita
+        case 'L': 
             *outX = x + w - 5;
             *outY = y + num;
             break;
-        case 'O': // Oeste - face esquerda
+        case 'O': 
             *outX = x + 5;
             *outY = y + num;
             break;
     }
-}
-
-// Desenha uma pessoa no SVG
-void desenharPessoaSVG(void* reg, void* ctx) {
-    typedef struct {
-        FILE* svg;
-        Hash hashQuadras;
-    } Contexto;
-    
-    Contexto* c = (Contexto*)ctx;
-    FILE* svg = c->svg;
-    Hash h_q = c->hashQuadras;
-    
-    if (!reg || !svg || !h_q) return;
-    
-    const char* cep = habitante_get_cep(reg);
-    if (!cep) return; // Sem-teto, não tem endereço
-    
-    char face = habitante_get_face(reg);
-    double num = habitante_get_numero(reg);
-    
-    // Busca a quadra pelo CEP
-    void* q_buffer = malloc(getQuadraSize());
-    if (!q_buffer) return;
-    
-    if (buscarHash(h_q, (char*)cep, q_buffer)) {
-        double px, py;
-        calcularPosicaoPessoa(
-            getQuadraX(q_buffer), 
-            getQuadraY(q_buffer),
-            getQuadraW(q_buffer), 
-            getQuadraH(q_buffer),
-            face, num, &px, &py
-        );
-        
-        // Desenha um círculo pequeno para a pessoa
-        fprintf(svg, "\t<circle cx=\"%lf\" cy=\"%lf\" r=\"3\" fill=\"blue\" />\n", px, py);
-    }
-    
-    free(q_buffer);
-}
-
-// Gera o SVG com todas as pessoas
-void gerarPessoasSVG(Hash h_p, Hash h_q, FILE* fSvg) {
-    if (!h_p || !h_q || !fSvg) return;
-    
-    typedef struct {
-        FILE* svg;
-        Hash hashQuadras;
-    } Contexto;
-    
-    Contexto ctx = {fSvg, h_q};
-    percorrerHash(h_p, &ctx, desenharPessoaSVG);
 }

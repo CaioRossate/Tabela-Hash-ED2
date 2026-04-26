@@ -92,7 +92,6 @@ int main(int argc, char* argv[]) {
             fprintf(fSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
             
             gerarCidadeSVG(hashQuadras, fSvg);
-            gerarPessoasSVG(hashPessoas, hashQuadras, fSvg);
             
             processarArquivoQry(pathCompletoQry, hashQuadras, hashPessoas, fTxt, fSvg);
             
