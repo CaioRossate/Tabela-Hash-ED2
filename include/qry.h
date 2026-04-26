@@ -85,23 +85,26 @@ void comando_rip(Hash h_p, Hash h_q, char* cpf, FILE* txt, FILE* svg);
  * @brief Realiza a mudança de endereço de um morador (Comando: mud).
  * @details Atualiza o endereço e marca o destino com um quadrado vermelho no SVG.
  * @param h_p Hash de pessoas. 
+ * @param h_q Hash de quadras.
  * @param cpf CPF do morador.
  * @param cep Novo CEP da quadra de destino.
  * @param face Face do destino (N, S, L, O).
  * @param num Número do destino.
  * @param cmpl Complemento do destino.
+ * @param txt Arquivo para o relatório da mudança.
  * @param svg Arquivo SVG para marcar a mudança no mapa.
  */
-void comando_mud(Hash h_p, char* cpf, char* cep, char face, double num, char* cmpl, FILE* svg);
+void comando_mud(Hash h_p, Hash h_q, char* cpf, char* cep, char face, double num, char* cmpl, FILE* txt, FILE* svg);
 
 /**
  * @brief Registra o despejo de um morador (Comando: dspj).
  * @details Reporta dados do despejo e marca o local com um círculo preto no SVG.
  * @param h_p Hash de pessoas. 
+ * @param h_q Hash de quadras.
  * @param cpf CPF do despejado.
  * @param txt Arquivo para o relatório do despejo.
  * @param svg Arquivo SVG para marcar o despejo no mapa.
  */
-void comando_dspj(Hash h_p, char* cpf, FILE* txt, FILE* svg);
+void comando_dspj(Hash h_p, Hash h_q, char* cpf, FILE* txt, FILE* svg);
 
 #endif
