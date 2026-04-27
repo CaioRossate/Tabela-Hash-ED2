@@ -12,10 +12,6 @@
 
 typedef void* Quadra;
 
-/**
- * @brief Retorna o tamanho em bytes da struct quadra.
- */
-size_t getQuadraSize();
 
 /**
  * @brief Processa o arquivo .geo e popula o hash de quadras
@@ -60,6 +56,11 @@ Quadra comando_cq (char* cfill, char* cstrk, char* sw);
 void destruirQuadra(Quadra q);
 
 // --- GETTERS ---
+
+/**
+ * @brief Retorna o tamanho em bytes da struct quadra.
+ */
+size_t getQuadraSize();
 
 /**
  * @brief Retorna o CEP da quadra informada.

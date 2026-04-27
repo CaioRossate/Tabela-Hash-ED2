@@ -100,28 +100,3 @@ void gerarCidadeSVG(Hash h_q, FILE* fSvg) {
     if (!h_q || !fSvg) return;
     percorrerHash(h_q, fSvg, desenharQuadraSVG);
 }
-
-// Calcula a posição de uma pessoa na face da quadra
-static void calcularPosicaoPessoa(double x, double y, double w, double h, char face, double num, double* outX, double* outY) {
-    *outX = x;
-    *outY = y;
-    
-    switch (face) {
-        case 'N': 
-            *outX = x + num;
-            *outY = y + 5;
-            break;
-        case 'S': 
-            *outX = x + num;
-            *outY = y + h - 5;
-            break;
-        case 'L': 
-            *outX = x + w - 5;
-            *outY = y + num;
-            break;
-        case 'O': 
-            *outX = x + 5;
-            *outY = y + num;
-            break;
-    }
-}
