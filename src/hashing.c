@@ -2,231 +2,254 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <assert.h>
 #include "hashing.h"
 
 #define BUCKET_CAPACIDADE 10
-#define TAM_CHAVE 128
 
+// O cabeçalho do bucket (profundidade_local + quantidade) é gravado em disco 
+// seguido pelos dados dos registros. O tamanho total do bucket em disco é: sizeof(int)*2  +  BUCKET_CAPACIDADE * tam_reg
 
 typedef struct {
     int profundidade_local;
     int quantidade;
-    char dados[BUCKET_CAPACIDADE * TAM_CHAVE];
-} Bucket;
+} BucketHeader;
 
 typedef struct {
-    FILE* arquivo;
-    int profundidade_global;
+    FILE*  arquivo;
+    int    profundidade_global;
     size_t tam_reg;
-    int total_indices;
-    long* offsets;
+    size_t tam_bucket_disco; 
+    int    total_indices;
+    long*  offsets;
 } HashExtensivel;
 
-// Funções auxiliares para manipulação de arquivos e hashing
-
+// Hash DJB2
 static uint64_t gerar_hash_djb2(const char* chave) {
-    uint64_t hash = 5381; //valor inicial aleatorio para ter certeza que não começa com 0
+    uint64_t hash = 5381;
     int c;
-    while ((c = *chave++)) hash = ((hash << 5) + hash) + c;
+    while ((c = (unsigned char)*chave++)) hash = ((hash << 5) + hash) + c;
     return hash;
 }
 
-static void salvar_bucket(FILE* fp, long offset, Bucket* b) {
-    fseek(fp, offset, SEEK_SET);
-    fwrite(b, sizeof(Bucket), 1, fp);
+// I/O de buckets dinâmicos
+
+static void salvar_bucket(HashExtensivel* h, long offset, BucketHeader* hdr, char* dados) {
+    fseek(h->arquivo, offset, SEEK_SET);
+    fwrite(hdr,  sizeof(BucketHeader), 1, h->arquivo);
+    fwrite(dados, h->tam_reg, BUCKET_CAPACIDADE, h->arquivo);
 }
 
-static void carregar_bucket(FILE* fp, long offset, Bucket* b) {
-    fseek(fp, offset, SEEK_SET);
-    fread(b, sizeof(Bucket), 1, fp);
+// Carrega cabeçalho + dados do offset indicado.'dados'
+// deve ter capacidade de BUCKET_CAPACIDADE * tam_reg bytes
+static void carregar_bucket(HashExtensivel* h, long offset, BucketHeader* hdr, char* dados) {
+    fseek(h->arquivo, offset, SEEK_SET);
+    fread(hdr,  sizeof(BucketHeader), 1, h->arquivo);
+    fread(dados, h->tam_reg, BUCKET_CAPACIDADE, h->arquivo);
 }
 
+// Aloca um novo bucket vazio no final do arquivo e retorna seu offset
 static long alocar_bucket(HashExtensivel* h, int profundidade) {
     fseek(h->arquivo, 0, SEEK_END);
     long offset = ftell(h->arquivo);
-    Bucket b = {0};
-    b.profundidade_local = profundidade;
-    b.quantidade = 0;
-    memset(b.dados, 0, sizeof(b.dados));
-    salvar_bucket(h->arquivo, offset, &b);
+
+    BucketHeader hdr = { profundidade, 0 };
+    char* zeros = calloc(BUCKET_CAPACIDADE, h->tam_reg);
+    fwrite(&hdr,  sizeof(BucketHeader), 1, h->arquivo);
+    fwrite(zeros, h->tam_reg, BUCKET_CAPACIDADE, h->arquivo);
+    free(zeros);
     return offset;
 }
 
-// Parte principal
 
 Hash inicializarHash(const char* nome_arquivo, int profundidade_inicial, size_t tamanho_registro) {
-    HashExtensivel* h = (HashExtensivel*)malloc(sizeof(HashExtensivel));
+    HashExtensivel* h = malloc(sizeof(HashExtensivel));
+    if (!h) return NULL;
+
     h->tam_reg = tamanho_registro;
+    h->tam_bucket_disco = sizeof(BucketHeader) + BUCKET_CAPACIDADE * tamanho_registro;
     h->arquivo = fopen(nome_arquivo, "w+b");
     if (!h->arquivo) { free(h); return NULL; }
 
     h->profundidade_global = profundidade_inicial;
-    h->total_indices = 1 << h->profundidade_global;
-    h->offsets = (long*)malloc(sizeof(long) * h->total_indices);
+    h->total_indices = 1 << profundidade_inicial;
+    h->offsets = malloc(sizeof(long) * h->total_indices);
+    if (!h->offsets) { fclose(h->arquivo); free(h); return NULL; }
 
     long offset_inicial = alocar_bucket(h, profundidade_inicial);
-    for (int i = 0; i < h->total_indices; i++) h->offsets[i] = offset_inicial;
+    for (int i = 0; i < h->total_indices; i++)
+        h->offsets[i] = offset_inicial;
 
     return (Hash)h;
 }
 
 bool inserirHash(Hash h, void* dado) {
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
-    char* chave = (char*)dado;
-    uint64_t v_hash = gerar_hash_djb2(chave);
-    int trava_seguranca = 0;
+    HashExtensivel* he = (HashExtensivel*)h;
+    const char* chave  = (const char*)dado;
+    uint64_t v_hash    = gerar_hash_djb2(chave);
+    int trava          = 0;
 
-    while (true) {
-        // Proteção contra loop infinito em caso de colisões excessivas
-        if (trava_seguranca++ > 32) {
-            fprintf(stderr, "Erro crítico: Loop de split detectado. Verifique a função de hash.\n");
+    // buffer reutilizável para dados do bucket
+    char* dados = malloc(BUCKET_CAPACIDADE * he->tam_reg);
+    if (!dados) return false;
+
+    while (1) {
+        if (trava++ > 64) {
+            fprintf(stderr, "Erro: loop de split detectado.\n");
+            free(dados);
             return false;
         }
 
-        int idx = v_hash & ((1 << hash_ext->profundidade_global) - 1);
-        long offset_alvo = hash_ext->offsets[idx];
-        
-        Bucket b;
-        carregar_bucket(hash_ext->arquivo, offset_alvo, &b);
+        int  idx = (int)(v_hash & (uint64_t)((1 << he->profundidade_global) - 1));
+        long offset_alvo = he->offsets[idx];
 
-        // Verificação de existência/atualização
-        for (int i = 0; i < b.quantidade; i++) {
-            char* chave_b = &b.dados[i * hash_ext->tam_reg];
-            if (strcmp(chave_b, chave) == 0) {
-                memcpy(chave_b, dado, hash_ext->tam_reg);
-                salvar_bucket(hash_ext->arquivo, offset_alvo, &b);
+        BucketHeader hdr;
+        carregar_bucket(he, offset_alvo, &hdr, dados);
+
+        for (int i = 0; i < hdr.quantidade; i++) {
+            char* reg = dados + i * he->tam_reg;
+            if (strcmp(reg, chave) == 0) {
+                memcpy(reg, dado, he->tam_reg);
+                salvar_bucket(he, offset_alvo, &hdr, dados);
+                free(dados);
                 return true;
             }
         }
 
-        // Inserção simples
-        if (b.quantidade < BUCKET_CAPACIDADE) {
-            memcpy(&b.dados[b.quantidade * hash_ext->tam_reg], dado, hash_ext->tam_reg);
-            b.quantidade++;
-            salvar_bucket(hash_ext->arquivo, offset_alvo, &b);
+        // Inserção simples se há espaço
+        if (hdr.quantidade < BUCKET_CAPACIDADE) {
+            memcpy(dados + hdr.quantidade * he->tam_reg, dado, he->tam_reg);
+            hdr.quantidade++;
+            salvar_bucket(he, offset_alvo, &hdr, dados);
+            free(dados);
             return true;
         }
 
-        // Split Necessário
-        if (b.profundidade_local == hash_ext->profundidade_global) {
-            int tam_antigo = hash_ext->total_indices;
-            hash_ext->profundidade_global++;
-            hash_ext->total_indices = 1 << hash_ext->profundidade_global;
-            hash_ext->offsets = realloc(hash_ext->offsets, sizeof(long) * hash_ext->total_indices);
-            
-            for (int i = 0; i < tam_antigo; i++) {
-                hash_ext->offsets[i + tam_antigo] = hash_ext->offsets[i];
-            }
+        // Split necessário
+
+        // Expande o diretório se profundidade local == global
+        if (hdr.profundidade_local == he->profundidade_global) {
+            int tam_antigo = he->total_indices;
+            he->profundidade_global++;
+            he->total_indices = 1 << he->profundidade_global;
+            he->offsets = realloc(he->offsets, sizeof(long) * he->total_indices);
+            for (int i = 0; i < tam_antigo; i++)
+                he->offsets[i + tam_antigo] = he->offsets[i];
         }
 
-        // Criar novo bucket e redistribuir
-        int bit_separador = 1 << b.profundidade_local;
-        b.profundidade_local++;
-        long novo_offset = alocar_bucket(hash_ext, b.profundidade_local);
+        // Cria novo bucket
+        int bit_separador = 1 << hdr.profundidade_local;
+        hdr.profundidade_local++;
+        long novo_offset = alocar_bucket(he, hdr.profundidade_local);
 
-        // Backup e limpeza do original
-        char buffer_backup[BUCKET_CAPACIDADE * TAM_CHAVE];
-        int qtd_backup = b.quantidade;
-        memcpy(buffer_backup, b.dados, sizeof(b.dados));
-        b.quantidade = 0;
-        memset(b.dados, 0, sizeof(b.dados));
-        salvar_bucket(hash_ext->arquivo, offset_alvo, &b);
+        // Backup dos registros atuais
+        char* backup = malloc(BUCKET_CAPACIDADE * he->tam_reg);
+        if (!backup) { free(dados); return false; }
+        int qtd_backup = hdr.quantidade;
+        memcpy(backup, dados, qtd_backup * he->tam_reg);
 
-        // Atualiza diretório
-        for (int i = 0; i < hash_ext->total_indices; i++) {
-            if (hash_ext->offsets[i] == offset_alvo && (i & bit_separador)) {
-                hash_ext->offsets[i] = novo_offset;
-            }
+        // Limpa bucket original
+        hdr.quantidade = 0;
+        memset(dados, 0, BUCKET_CAPACIDADE * he->tam_reg);
+        salvar_bucket(he, offset_alvo, &hdr, dados);
+
+        // Atualiza diretório: entradas com o bit separador apontam para o novo bucket
+        for (int i = 0; i < he->total_indices; i++) {
+            if (he->offsets[i] == offset_alvo && (i & bit_separador))
+                he->offsets[i] = novo_offset;
         }
 
-        // Redistribuição dos registros
+        // Redistribui os registros
         for (int i = 0; i < qtd_backup; i++) {
-            void* reg_atual = &buffer_backup[i * hash_ext->tam_reg];
-            uint64_t h_item = gerar_hash_djb2((char*)reg_atual);
-            int idx_item = h_item & ((1 << hash_ext->profundidade_global) - 1);
-            long offset_dest = hash_ext->offsets[idx_item];
-            
-            Bucket b_dest;
-            carregar_bucket(hash_ext->arquivo, offset_dest, &b_dest);
-            if (b_dest.quantidade < BUCKET_CAPACIDADE) {
-                memcpy(&b_dest.dados[b_dest.quantidade * hash_ext->tam_reg], reg_atual, hash_ext->tam_reg);
-                b_dest.quantidade++;
-                salvar_bucket(hash_ext->arquivo, offset_dest, &b_dest);
+            char* reg  = backup + i * he->tam_reg;
+            uint64_t hv = gerar_hash_djb2(reg);
+            int idx2   = (int)(hv & (uint64_t)((1 << he->profundidade_global) - 1));
+            long odest = he->offsets[idx2];
+
+            BucketHeader hdr2;
+            char* dados2 = malloc(BUCKET_CAPACIDADE * he->tam_reg);
+            carregar_bucket(he, odest, &hdr2, dados2);
+            if (hdr2.quantidade < BUCKET_CAPACIDADE) {
+                memcpy(dados2 + hdr2.quantidade * he->tam_reg, reg, he->tam_reg);
+                hdr2.quantidade++;
+                salvar_bucket(he, odest, &hdr2, dados2);
             }
+            free(dados2);
         }
+        free(backup);
+        // Loop: tenta inserir o dado original novamente
     }
 }
 
 bool buscarHash(Hash h, char* chave, void* destino) {
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
-    uint64_t v_hash = gerar_hash_djb2(chave);
-    int idx = v_hash & ((1 << hash_ext->profundidade_global) - 1);
-    
-    Bucket b;
-    carregar_bucket(hash_ext->arquivo, hash_ext->offsets[idx], &b);
+    HashExtensivel* he = (HashExtensivel*)h;
+    uint64_t v_hash    = gerar_hash_djb2(chave);
+    int idx = (int)(v_hash & (uint64_t)((1 << he->profundidade_global) - 1));
 
-    for (int i = 0; i < b.quantidade; i++) {
-        char* chave_b = &b.dados[i * hash_ext->tam_reg];
-        if (strcmp(chave_b, chave) == 0) {
-            memcpy(destino, &b.dados[i * hash_ext->tam_reg], hash_ext->tam_reg);
+    BucketHeader hdr;
+    char* dados = malloc(BUCKET_CAPACIDADE * he->tam_reg);
+    carregar_bucket(he, he->offsets[idx], &hdr, dados);
+
+    for (int i = 0; i < hdr.quantidade; i++) {
+        char* reg = dados + i * he->tam_reg;
+        if (strcmp(reg, chave) == 0) {
+            memcpy(destino, reg, he->tam_reg);
+            free(dados);
             return true;
         }
     }
+    free(dados);
+    return false;
+}
+
+bool removerHash(Hash h, char* chave) {
+    HashExtensivel* he = (HashExtensivel*)h;
+    uint64_t v_hash    = gerar_hash_djb2(chave);
+    int idx  = (int)(v_hash & (uint64_t)((1 << he->profundidade_global) - 1));
+    long off = he->offsets[idx];
+
+    BucketHeader hdr;
+    char* dados = malloc(BUCKET_CAPACIDADE * he->tam_reg);
+    carregar_bucket(he, off, &hdr, dados);
+
+    for (int i = 0; i < hdr.quantidade; i++) {
+        char* reg = dados + i * he->tam_reg;
+        if (strcmp(reg, chave) == 0) {
+            // Substitui pelo último para não deixar buracos
+            if (i < hdr.quantidade - 1)
+                memcpy(reg, dados + (hdr.quantidade - 1) * he->tam_reg, he->tam_reg);
+            hdr.quantidade--;
+            salvar_bucket(he, off, &hdr, dados);
+            free(dados);
+            return true;
+        }
+    }
+    free(dados);
     return false;
 }
 
 void percorrerHash(Hash h, void* contexto, void (*funcao_visita)(void* registro, void* contexto)) {
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
-    
-    long* visitados = (long*)malloc(sizeof(long) * hash_ext->total_indices);
-    int qtd_visitados = 0;
+    HashExtensivel* he = (HashExtensivel*)h;
+    long* visitados    = malloc(sizeof(long) * he->total_indices);
+    int   qtd_v        = 0;
+    char* dados        = malloc(BUCKET_CAPACIDADE * he->tam_reg);
 
-    for (int i = 0; i < hash_ext->total_indices; i++) {
-        long offset = hash_ext->offsets[i];
-        
+    for (int i = 0; i < he->total_indices; i++) {
+        long offset = he->offsets[i];
+
         bool ja_foi = false;
-        for(int j=0; j<qtd_visitados; j++) {
-            if(visitados[j] == offset) {
-                ja_foi = true; 
-                break;
-            }
-        }
-        if(ja_foi) continue;
+        for (int j = 0; j < qtd_v; j++)
+            if (visitados[j] == offset) { ja_foi = true; break; }
+        if (ja_foi) continue;
 
-        Bucket b;
-        carregar_bucket(hash_ext->arquivo, offset, &b);
-        for (int j = 0; j < b.quantidade; j++) {
-            funcao_visita(&b.dados[j * hash_ext->tam_reg], contexto);
-        }
-        visitados[qtd_visitados++] = offset;
+        BucketHeader hdr;
+        carregar_bucket(he, offset, &hdr, dados);
+        for (int j = 0; j < hdr.quantidade; j++)
+            funcao_visita(dados + j * he->tam_reg, contexto);
+
+        visitados[qtd_v++] = offset;
     }
+    free(dados);
     free(visitados);
-}
-
-bool removerHash(Hash h, char* chave) {
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
-    uint64_t v_hash = gerar_hash_djb2(chave);
-    int idx = v_hash & ((1 << hash_ext->profundidade_global) - 1);
-    long offset = hash_ext->offsets[idx];
-
-    Bucket b;
-    carregar_bucket(hash_ext->arquivo, offset, &b);
-
-    for (int i = 0; i < b.quantidade; i++) {
-        char* chave_b = &b.dados[i * hash_ext->tam_reg];
-        if (strcmp(chave_b, chave) == 0) {
-            // Substitui o registro a ser removido pelo último registro do bucket para manter semelhança de array
-            if (i < b.quantidade - 1) {
-                void* ultimo_reg = &b.dados[(b.quantidade - 1) * hash_ext->tam_reg];
-                memcpy(chave_b, ultimo_reg, hash_ext->tam_reg);
-            }
-            b.quantidade--;
-            salvar_bucket(hash_ext->arquivo, offset, &b);
-            return true;
-        }
-    }
-    return false;
 }
 
 int getProfundidadeGlobal(Hash h) {
@@ -239,42 +262,45 @@ int getQuantidadeBuckets(Hash h) {
 
 void encerrarHash(Hash h) {
     if (!h) return;
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
-    fclose(hash_ext->arquivo);
-    free(hash_ext->offsets);
-    free(hash_ext);
+    HashExtensivel* he = (HashExtensivel*)h;
+    fclose(he->arquivo);
+    free(he->offsets);
+    free(he);
 }
 
 void gerarRelatorioHash(Hash h, const char* nome_arquivo_relatorio) {
-    HashExtensivel* hash_ext = (HashExtensivel*)h;
+    HashExtensivel* he = (HashExtensivel*)h;
     FILE* rel = fopen(nome_arquivo_relatorio, "w");
     if (!rel) return;
 
     fprintf(rel, "--- RELATORIO HASH EXTENSIVEL ---\n");
-    fprintf(rel, "Profundidade Global: %d\n", hash_ext->profundidade_global);
-    fprintf(rel, "Tamanho do Diretorio: %d\n", hash_ext->total_indices);
-    fprintf(rel, "Tamanho do Registro: %zu bytes\n\n", hash_ext->tam_reg);
+    fprintf(rel, "Profundidade Global : %d\n", he->profundidade_global);
+    fprintf(rel, "Tamanho do Diretorio: %d entradas\n", he->total_indices);
+    fprintf(rel, "Tamanho do Registro : %zu bytes\n", he->tam_reg);
+    fprintf(rel, "Tamanho do Bucket   : %zu bytes (cabecalho + %d registros)\n\n", he->tam_bucket_disco, BUCKET_CAPACIDADE);
 
-    // Para evitar imprimir buckets duplicados 
-    long* visitados = malloc(sizeof(long) * hash_ext->total_indices);
-    int qtd_v = 0;
+    long* visitados = malloc(sizeof(long) * he->total_indices);
+    int   qtd_v     = 0;
+    char* dados     = malloc(BUCKET_CAPACIDADE * he->tam_reg);
 
-    for (int i = 0; i < hash_ext->total_indices; i++) {
-        long offset = hash_ext->offsets[i];
+    for (int i = 0; i < he->total_indices; i++) {
+        long offset = he->offsets[i];
         bool ja_foi = false;
-        for(int j=0; j<qtd_v; j++) if(visitados[j] == offset) { ja_foi = true; break; }
-        
-        fprintf(rel, "Indice [%d] -> Bucket no Offset (%ld)%s\n", i, offset, ja_foi ? " (ja listado)" : "");
-        
+        for (int j = 0; j < qtd_v; j++)
+            if (visitados[j] == offset) { ja_foi = true; break; }
+
+        fprintf(rel, "Indice [%d] -> offset %ld%s\n", i, offset, ja_foi ? " (ja listado)" : "");
+
         if (!ja_foi) {
-            Bucket b;
-            carregar_bucket(hash_ext->arquivo, offset, &b);
-            fprintf(rel, "   > Profundidade Local: %d\n", b.profundidade_local);
-            fprintf(rel, "   > Ocupacao: %d/%d\n", b.quantidade, BUCKET_CAPACIDADE);
+            BucketHeader hdr;
+            carregar_bucket(he, offset, &hdr, dados);
+            fprintf(rel, "   > Profundidade Local: %d\n", hdr.profundidade_local);
+            fprintf(rel, "   > Ocupacao: %d/%d\n", hdr.quantidade, BUCKET_CAPACIDADE);
             visitados[qtd_v++] = offset;
         }
     }
 
+    free(dados);
     free(visitados);
     fclose(rel);
 }
