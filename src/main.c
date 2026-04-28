@@ -39,16 +39,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Arquivo .geo
+    // Geo
     char* pathCompletoGeo = concatenarCaminho(paths[ENTRADA], paths[GEO]);
     processarArquivoGeo(pathCompletoGeo, hashQuadras);
 
-    // Arquivo .pm: usa -pm se fornecido, senão deriva do .geo
+    // Arquivo .pm: usa -pm se fornecido, senao deriva do .geo
     char* pathCompletoPm = NULL;
     if (paths[PM]) {
         pathCompletoPm = concatenarCaminho(paths[ENTRADA], paths[PM]);
     } else {
-        // troca extensão do .geo por .pm
         char pathPmBuf[512];
         strncpy(pathPmBuf, pathCompletoGeo, sizeof(pathPmBuf) - 1);
         pathPmBuf[sizeof(pathPmBuf) - 1] = '\0';
@@ -63,7 +62,6 @@ int main(int argc, char* argv[]) {
     if (paths[QUERY]) {
         char* pathCompletoQry = concatenarCaminho(paths[ENTRADA], paths[QUERY]);
 
-        // Monta nomes dos arquivos de saída: <geoBase>-<qryBase>.txt/.svg
         char geoBase[128];
         strncpy(geoBase, paths[GEO], sizeof(geoBase) - 1);
         geoBase[sizeof(geoBase) - 1] = '\0';
@@ -83,13 +81,25 @@ int main(int argc, char* argv[]) {
         FILE* fTxt = fopen(pathSaidaTxt, "w");
         FILE* fSvg = fopen(pathSaidaSvg, "w");
 
-        if (!fTxt) { printf("Erro ao criar TXT: %s\n", pathSaidaTxt); }
-        if (!fSvg) { printf("Erro ao criar SVG: %s\n", pathSaidaSvg); }
+        if (!fTxt) printf("Erro ao criar TXT: %s\n", pathSaidaTxt);
+        if (!fSvg) printf("Erro ao criar SVG: %s\n", pathSaidaSvg);
 
         if (fTxt && fSvg) {
-            fprintf(fSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
+            // Calcula bounding box e abre o svg com viewBox adequado
+            double vx, vy, vw, vh;
+            calcularBBoxCidade(hashQuadras, &vx, &vy, &vw, &vh);
+            fprintf(fSvg,
+                "<svg xmlns=\"http://www.w3.org/2000/svg\""
+                " viewBox=\"%lf %lf %lf %lf\""
+                " width=\"100%%\" height=\"100%%\">\n",
+                vx, vy, vw, vh);
+
+            // Desenha as quadras
             gerarCidadeSVG(hashQuadras, fSvg);
+
+            // Processa os comandos .qry (escrevem no svg e no txt)
             processarArquivoQry(pathCompletoQry, hashQuadras, hashPessoas, fTxt, fSvg);
+
             fprintf(fSvg, "</svg>\n");
             fclose(fTxt);
             fclose(fSvg);

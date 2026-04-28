@@ -54,8 +54,17 @@ Quadra comando_cq (char* cfill, char* cstrk, char* sw);
  * @param q A quadra a ser destruída.
  */
 void destruirQuadra(Quadra q);
+/**
+ * @brief Retorna o tamanho em bytes da struct quadra.
+ * @param h_q O manipulador do Hashfile de quadras.
+ * @param x Ponteiro para armazenar a coordenada X mínima.
+ * @param y Ponteiro para armazenar a coordenada Y mínima.
+ * @param w Ponteiro para armazenar a largura total (max_x - min_x).
+ * @param h Ponteiro para armazenar a altura total (max_y - min_y).
+ */
+void calcularBBoxCidade(Hash h_q, double* x, double* y, double* w, double* h);
 
-// --- GETTERS ---
+// Getters
 
 /**
  * @brief Retorna o tamanho em bytes da struct quadra.
