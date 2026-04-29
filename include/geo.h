@@ -8,6 +8,9 @@
 /**
  * @file geo.h
  * @brief Gerenciamento de quadras e processamento do arquivo .geo.
+ * @details Este módulo define a estrutura de dados para representar uma quadra,
+ * bem como as funções para processar o arquivo .geo, criar quadras, calcular a
+ * bounding box da cidade e gerar a representação SVG das quadras.
  */
 
 typedef void* Quadra;

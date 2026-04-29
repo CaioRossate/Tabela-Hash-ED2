@@ -7,6 +7,7 @@
 /**
  * @file pessoa.h
  * @brief Definições para manipulação de habitantes de Bitnópolis.
+ * @details Este módulo define a estrutura de dados para representar uma pessoa.
  */
 
 typedef void* Pessoa;

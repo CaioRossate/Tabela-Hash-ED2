@@ -7,6 +7,8 @@
 /**
  * @file qry.h
  * @brief Execução dos comandos de consulta e atualização definidos no arquivo .qry.
+ * @details Este módulo é responsável por processar os comandos do arquivo .qry,
+ * interagir com os Hashes de quadras e pessoas, e gerar as saídas necessárias.
  */
 
 /**
