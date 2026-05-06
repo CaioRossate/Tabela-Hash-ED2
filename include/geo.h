@@ -8,128 +8,107 @@
 /**
  * @file geo.h
  * @brief Gerenciamento de quadras e processamento do arquivo .geo.
- * @details Este módulo define a estrutura de dados para representar uma quadra,
- * bem como as funções para processar o arquivo .geo, criar quadras, calcular a
- * bounding box da cidade e gerar a representação SVG das quadras.
  */
 
 typedef void* Quadra;
 
-
 /**
- * @brief Processa o arquivo .geo e popula o hash de quadras
- * 
+ * @brief Processa o arquivo .geo e popula o hash de quadras.
  */
 bool processarArquivoGeo(const char* path_geo, Hash hash_quadras);
 
 /**
- * @brief Gera a representação SVG de todas as quadras armazenadas no Hash.
+ * @brief Calcula o bounding box de todas as quadras do hash.
  * @param h_q O manipulador do Hashfile de quadras.
- * @param fSvg Ponteiro para o arquivo SVG aberto para escrita.
+ * @param vx  Saída: X mínimo com margem.
+ * @param vy  Saída: Y mínimo com margem.
+ * @param vw  Saída: largura total com margem.
+ * @param vh  Saída: altura total com margem.
  */
-void gerarCidadeSVG(Hash h_q, FILE* fSvg);
+void calcularBBoxCidade(Hash h_q, double* vx, double* vy, double* vw, double* vh);
+
+/**
+ * @brief Desenha as quadras no SVG, excluindo as de CEPs removidos.
+ * @param h_q O manipulador do Hashfile de quadras.
+ * @param fSvg Arquivo SVG aberto para escrita.
+ * @param ceps_removidos Array de CEPs que não devem ser desenhados (podem ser NULL).
+ * @param n_removidos   Quantidade de CEPs no array.
+ */
+void gerarCidadeSVG(Hash h_q, FILE* fSvg, char ceps_removidos[][20], int n_removidos);
 
 /**
  * @brief Cria uma instância de quadra em memória.
- * * @param cep O CEP da quadra (chave).
- * * @param x Coordenada X da quadra.
- * * @param y Coordenada Y da quadra.
- * * @param w Largura da quadra.
- * * @param h Altura da quadra.
- * * @param cor_b Cor da borda.
- * * @param cor_p Cor de preenchimento.
- * * @param sw Largura da borda.
- * @return Retorna um ponteiro (Quadra) para a estrutura criada, ou NULL em caso de falha na alocação.
  */
 Quadra criarQuadra(char* cep, double x, double y, double w, double h, char* cor_b, char* cor_p, char* sw);
 
 /**
- * @brief Cria uma instância de quadra em memória usando as cores padrão (preenchimento branco, borda preta, largura 1.0).
- * @param cfill Cor de preenchimento.
- * @param cstrk Cor da borda.
- * @param sw Espessura da borda.
- * @return Retorna um ponteiro (Quadra) para a estrutura criada, ou NULL
+ * @brief Retorna uma quadra-template com as cores e espessura fornecidas (comando cq).
  */
-Quadra comando_cq (char* cfill, char* cstrk, char* sw);
+Quadra comando_cq(char* cfill, char* cstrk, char* sw);
 
 /**
  * @brief Libera a memória alocada para a quadra.
- * @param q A quadra a ser destruída.
  */
 void destruirQuadra(Quadra q);
-/**
- * @brief Retorna o tamanho em bytes da struct quadra.
- * @param h_q O manipulador do Hashfile de quadras.
- * @param x Ponteiro para armazenar a coordenada X mínima.
- * @param y Ponteiro para armazenar a coordenada Y mínima.
- * @param w Ponteiro para armazenar a largura total (max_x - min_x).
- * @param h Ponteiro para armazenar a altura total (max_y - min_y).
- */
-void calcularBBoxCidade(Hash h_q, double* x, double* y, double* w, double* h);
 
-// Getters
+//Getters
 
-/**
- * @brief Retorna o tamanho em bytes da struct quadra.
- */
 size_t getQuadraSize();
 
 /**
- * @brief Retorna o CEP da quadra informada.
- * @param q A quadra da qual se deseja obter o CEP.
- * @return O CEP da quadra.
+ * @brief Retorna o CEP da quadra.
+ * @param q A quadra a ser consultada.
+ * @return O CEP da quadra ou NULL se q for NULL.
  */
 char* getQuadraCEP(Quadra q);
 
 /**
  * @brief Retorna a coordenada X da quadra.
- * @param q A quadra da qual se deseja obter a coordenada X.
- * @return A coordenada X da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A coordenada X da quadra ou 0 se q for NULL.
  */
 double getQuadraX(Quadra q);
 
 /**
  * @brief Retorna a coordenada Y da quadra.
- * @param q A quadra da qual se deseja obter a coordenada Y.
- * @return A coordenada Y da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A coordenada Y da quadra ou 0 se q for NULL.
  */
 double getQuadraY(Quadra q);
 
 /**
  * @brief Retorna a largura da quadra.
- * @param q A quadra da qual se deseja obter a largura.
- * @return A largura da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A largura da quadra ou 0 se q for NULL.
  */
 double getQuadraW(Quadra q);
 
 /**
  * @brief Retorna a altura da quadra.
- * @param q A quadra da qual se deseja obter a altura.
- * @return A altura da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A altura da quadra ou 0 se q for NULL.
  */
 double getQuadraH(Quadra q);
 
-/**
- * @brief Retorna a cor de preenchimento da quadra.
- * @param q A quadra da qual se deseja obter a cor.
- * @return Ponteiro para a string de cor de preenchimento.
- */
+ /**
+  * @brief Retorna a espessura da linha da quadra.
+  * @param q A quadra a ser consultada.
+  * @return A espessura da linha da quadra ou NULL se q for NULL.
+  */
 const char* getQuadraCorP(Quadra q);
 
 /**
- * @brief Retorna a cor da borda da quadra.
- * @param q A quadra da qual se deseja obter a cor.
- * @return Ponteiro para a string de cor da borda.
+ * @brief Retorna a cor de contorno da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A cor de contorno da quadra ou NULL se q for NULL.
  */
 const char* getQuadraCorB(Quadra q);
 
 /**
- * @brief Retorna a espessura da borda da quadra.
- * @param q A quadra da qual se deseja obter a espessura.
- * @return Ponteiro para a string de espessura da borda.
+ * @brief Retorna a cor de preenchimento da quadra.
+ * @param q A quadra a ser consultada.
+ * @return A cor de preenchimento da quadra ou NULL se q for NULL.
  */
 const char* getQuadraSW(Quadra q);
-
-
 
 #endif
